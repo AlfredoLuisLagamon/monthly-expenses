@@ -1,7 +1,12 @@
 # Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
-# dependencies
+# Dependencies
 node_modules/
+
+# Logs and temp
+*.log
+npm-debug.log*
+.npm
 
 # Expo
 .expo/
@@ -31,7 +36,10 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
+server/.env
+server/service-account.json
 
 # typescript
 *.tsbuildinfo
