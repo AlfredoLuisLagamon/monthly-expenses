@@ -5,6 +5,7 @@
   "scripts": {
     "start": "expo start",
     "start:tunnel": "expo start --tunnel",
+    "build": "cd server && npm install && npm run build",
     "server": "npm run dev --prefix server",
     "android": "expo start --android",
     "android:usb": "adb reverse tcp:8082 tcp:8082 && adb reverse tcp:3001 tcp:3001 && expo start --localhost --port 8082",
@@ -13,6 +14,7 @@
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",
+    "serverless-http": "^3.2.0",
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~54.0.33",
     "expo-linking": "~8.0.11",

@@ -44,6 +44,19 @@ The backend must run 24/7 (or as a serverless function) and have these **environ
 4. In `server/fly.toml` (or via CLI), ensure the app runs `npm run build && npm start` or `node index.js`, and listens on `PORT` (usually `8080`).
 5. Deploy: `fly deploy`. Your API URL will be `https://<your-app>.fly.dev`.
 
+### Option D: Vercel
+
+The repo includes a serverless API handler so the same Express app runs on Vercel as a serverless function.
+
+1. Push your repo to GitHub.
+2. Go to [vercel.com](https://vercel.com), **Add New** → **Project** → Import your repo.
+3. **Root Directory**: leave as the repo root (do not set to `server`).
+4. **Build Command**: `npm run build` (already in `vercel.json`; this builds the server).
+5. **Environment Variables**: Add `GOOGLE_SERVICE_ACCOUNT_JSON` and paste your service account JSON as a **single line** (minified). Do not set `PORT`; Vercel sets it.
+6. Deploy. Your API will be at `https://<your-project>.vercel.app/api/*` (e.g. `https://<your-project>.vercel.app/api/health`).
+
+Use **that base URL** (e.g. `https://<your-project>.vercel.app`) as `EXPO_PUBLIC_API_URL` in the app; the app calls `/api/data`, `/api/ensure-month`, etc. on that origin.
+
 ### After deployment
 
 - Open `https://YOUR_API_URL/api/health` in a browser; you should see `{"ok":true}` or similar.

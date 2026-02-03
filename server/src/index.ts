@@ -80,7 +80,11 @@ app.get('/', (_req, res) => {
   `);
 });
 
+export { app };
+
 const PORT = Number(process.env.PORT) || 3001;
-app.listen(PORT, () => {
-  console.log(`Server listening on http://localhost:${PORT}`);
-});
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`Server listening on http://localhost:${PORT}`);
+  });
+}

@@ -70,7 +70,27 @@ In the app: open **Settings**, paste your Google Sheet ID (or full URL), tap **S
 
 **Note:** If `adb` is not found, install [Android Platform Tools](https://developer.android.com/studio/releases/platform-tools) and add the `platform-tools` folder to your PATH.
 
-For **deploying** the backend and app (Railway, Render, Fly.io, EAS Build), see **[docs/HOSTING.md](docs/HOSTING.md)**.
+For **deploying** the backend and app (Railway, Render, Fly.io, Vercel, EAS Build), see **[docs/HOSTING.md](docs/HOSTING.md)**.
+
+## Build APK (standalone Android app)
+
+You can build an **APK** so users install the app without Expo Go.
+
+1. **Host your API** first (e.g. Vercel, Railway) and note the URL (e.g. `https://your-app.vercel.app`).
+2. Install EAS CLI and log in:
+   ```bash
+   npm install -g eas-cli
+   eas login
+   ```
+3. From the project root, run a build and pass your API URL (so it’s baked into the app):
+   ```bash
+   eas build --platform android --profile production
+   ```
+   When prompted, or in [expo.dev](https://expo.dev) → your project → **Build** → **Environment variables**, set:
+   - `EXPO_PUBLIC_API_URL` = your API base URL (e.g. `https://your-app.vercel.app`)
+4. When the build finishes, EAS will give you a link to **download the APK**. Install that file on any Android device (enable “Install from unknown sources” if needed).
+
+No Expo Go required: the APK is a standalone app. The same flow works for **preview** builds (`--profile preview`); `eas.json` is already set to produce APKs for both profiles.
 
 ## Scripts
 
