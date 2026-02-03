@@ -35,7 +35,14 @@ export default function SettingsScreen() {
         Alert.alert('Validation failed', result.error);
       }
     } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Could not validate sheet');
+      const msg = e instanceof Error ? e.message : 'Could not validate sheet';
+      const isNetwork = /network request failed|failed to fetch|load failed/i.test(msg);
+      Alert.alert(
+        'Error',
+        isNetwork
+          ? 'Cannot reach the server. Check your internet connection and try again. If you use a hosted API (e.g. Vercel), the first request can take a few seconds—try again.'
+          : msg
+      );
     } finally {
       setValidating(false);
     }

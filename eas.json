@@ -18,7 +18,9 @@
       "android": {
         "buildType": "apk"
       },
-      "env": {}
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://monthly-expenses-mu.vercel.app"
+      }
     }
   },
   "submit": {

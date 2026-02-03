@@ -73,12 +73,27 @@ export async function updateMonthlyStatus(
   }
 }
 
+const fetchWithTimeout = (url: string, options: RequestInit = {}, timeoutMs = 25000): Promise<Response> => {
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(t));
+};
+
 export async function validateWorkbook(sheetId: string): Promise<ValidateResponse> {
   const url = `${getBaseUrl()}/api/validate?sheetId=${encodeURIComponent(sheetId)}`;
-  const res = await fetch(url);
-  const data = await res.json();
-  if (!res.ok) return { valid: false, error: data.error || `HTTP ${res.status}` };
-  return data;
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetchWithTimeout(url);
+      const data = await res.json();
+      if (!res.ok) return { valid: false, error: data.error || `HTTP ${res.status}` };
+      return data;
+    } catch (e) {
+      lastErr = e;
+      if (attempt === 0) await new Promise((r) => setTimeout(r, 3000));
+    }
+  }
+  throw lastErr;
 }
 
 export async function addMaster(sheetId: string, row: Partial<MasterRow>): Promise<void> {

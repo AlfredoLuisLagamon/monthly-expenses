@@ -10,7 +10,8 @@
     "android": "expo start --android",
     "android:usb": "adb reverse tcp:8082 tcp:8082 && adb reverse tcp:3001 tcp:3001 && expo start --localhost --port 8082",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "build:apk": "npx eas-cli build --platform android --profile production"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",

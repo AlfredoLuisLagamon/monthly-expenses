@@ -52,4 +52,10 @@ Do **not** add `PORT`; Vercel sets it.
 - API base URL: `https://<your-project>.vercel.app`
 - Health check: `https://<your-project>.vercel.app/api/health` → should return `{"ok":true}`
 
+Use the base URL as **EXPO_PUBLIC_API_URL** when building your app (e.g. EAS Build) or in the Expo app's `.env` for web.
+
+### Cold starts (slow first request)
+
+Serverless functions spin down when idle. The first request after that can take 10–30+ seconds (cold start). The repo adds a **cron** in `vercel.json` that pings `/api/health` every 5 minutes to keep the function warm. Cron Jobs require **Vercel Pro**. On the free (Hobby) plan, use an external pinger (e.g. cron-job.org) to GET your `/api/health` URL every 5 minutes, or accept a slow first request (the app retries once).
+
 Use the base URL as **EXPO_PUBLIC_API_URL** when building your app (e.g. EAS Build) or in the Expo app’s `.env` for web.
