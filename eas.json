@@ -1,6 +1,7 @@
 {
   "cli": {
-    "version": ">= 12.0.0"
+    "version": ">= 12.0.0",
+    "appVersionSource": "local"
   },
   "build": {
     "development": {
@@ -19,7 +20,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://monthly-expenses-mu.vercel.app"
+        "EXPO_PUBLIC_API_URL": "https://monthly-expenses-api.fly.dev"
       }
     }
   },

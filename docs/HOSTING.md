@@ -57,6 +57,18 @@ The repo includes a serverless API handler so the same Express app runs on Verce
 
 Use **that base URL** (e.g. `https://<your-project>.vercel.app`) as `EXPO_PUBLIC_API_URL` in the app; the app calls `/api/data`, `/api/ensure-month`, etc. on that origin.
 
+**Free way to avoid slow first load (cold start):** Vercel functions sleep when idle. Use a free external pinger so your API stays warm:
+
+1. Go to [cron-job.org](https://cron-job.org) and create a free account.
+2. **Create Cronjob** → **Title:** e.g. "Monthly Expenses API keep-alive".
+3. **URL:** `https://monthly-expenses-mu.vercel.app/api/health` (or your Vercel URL + `/api/health`).
+4. **Schedule:** Every 5 minutes (or the minimum the site allows).
+5. Save. The pinger will call your API every 5 minutes so when you open the app, the function is already warm and responds in 1–2 seconds.
+
+No migration, no cost. Your app and APK stay as they are.
+
+**If the pinger shows "Failed (timeout)":** Vercel cold start can exceed 30 seconds, so the pinger never warms the function. For a **free always-on** API with no cold start, use **Fly.io** (Option C below): the repo includes `server/Dockerfile` and `server/fly.toml`; deploy from the `server` folder and set `EXPO_PUBLIC_API_URL` to your `https://<app>.fly.dev` URL, then rebuild the APK once.
+
 ### After deployment
 
 - Open `https://YOUR_API_URL/api/health` in a browser; you should see `{"ok":true}` or similar.

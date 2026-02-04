@@ -6,7 +6,7 @@ import { useSheetId } from '../../contexts/SheetIdContext';
 import { THEME_PRESETS } from '../../constants/storage';
 import { spacing, borderRadius } from '../../constants/layout';
 import { extractSheetId } from '../../lib/sheetId';
-import { validateWorkbook } from '../../lib/api';
+import { validateWorkbook, getBaseUrl } from '../../lib/api';
 
 export default function SettingsScreen() {
   const { colors, themeId, setThemeId } = useTheme();
@@ -14,6 +14,8 @@ export default function SettingsScreen() {
   const router = useRouter();
   const [input, setInput] = useState(sheetId ?? '');
   const [validating, setValidating] = useState(false);
+  const [testingConnection, setTestingConnection] = useState(false);
+  const apiBaseUrl = getBaseUrl();
 
   useEffect(() => {
     setInput(sheetId ?? '');
@@ -40,11 +42,29 @@ export default function SettingsScreen() {
       Alert.alert(
         'Error',
         isNetwork
-          ? 'Cannot reach the server. Check your internet connection and try again. If you use a hosted API (e.g. Vercel), the first request can take a few seconds—try again.'
+          ? 'Cannot reach the server. Check your internet connection and try again. The first request to a hosted API can take a few seconds—try again.'
           : msg
       );
     } finally {
       setValidating(false);
+    }
+  };
+
+  const handleTestConnection = async () => {
+    setTestingConnection(true);
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/health`, { method: 'GET' });
+      const text = await res.text();
+      if (res.ok) {
+        Alert.alert('Connection OK', `Server responded: ${text}`);
+      } else {
+        Alert.alert('Connection failed', `HTTP ${res.status}: ${text}`);
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      Alert.alert('Connection failed', msg);
+    } finally {
+      setTestingConnection(false);
     }
   };
 
@@ -53,6 +73,23 @@ export default function SettingsScreen() {
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.content}
     >
+      <View style={[styles.section, { borderBottomColor: colors.border }]}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>API</Text>
+        <Text style={[styles.apiUrl, { color: colors.textSecondary }]} numberOfLines={2}>
+          {apiBaseUrl}
+        </Text>
+        <TouchableOpacity
+          style={[styles.testBtn, { borderColor: colors.border }]}
+          onPress={handleTestConnection}
+          disabled={testingConnection}
+        >
+          {testingConnection ? (
+            <ActivityIndicator size="small" color={colors.primary} />
+          ) : (
+            <Text style={[styles.testBtnText, { color: colors.primary }]}>Test connection</Text>
+          )}
+        </TouchableOpacity>
+      </View>
       <View style={[styles.section, { borderBottomColor: colors.border }]}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Google Sheet</Text>
         <Text style={[styles.hint, { color: colors.textSecondary }]}>
@@ -150,6 +187,9 @@ const styles = StyleSheet.create({
   },
   btn: { flexDirection: 'row', paddingVertical: spacing.base, borderRadius: borderRadius.sm, alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
   btnText: { color: '#fff', fontWeight: '600' },
+  apiUrl: { fontSize: 12, marginBottom: spacing.sm },
+  testBtn: { borderWidth: 1, paddingVertical: spacing.sm, borderRadius: borderRadius.sm, alignItems: 'center', marginBottom: spacing.sm },
+  testBtnText: { fontWeight: '600' },
   linkBtn: { borderWidth: 1, paddingVertical: spacing.md, borderRadius: borderRadius.sm, alignItems: 'center' },
   linkText: { fontWeight: '600' },
   themeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },

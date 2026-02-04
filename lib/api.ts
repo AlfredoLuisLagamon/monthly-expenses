@@ -1,9 +1,17 @@
-const getBaseUrl = (): string => {
+import Constants from 'expo-constants';
+
+const DEFAULT_API_URL = 'https://monthly-expenses-api.fly.dev';
+
+export function getBaseUrl(): string {
+  const fromExtra = Constants.expoConfig?.extra?.apiUrl;
+  if (typeof fromExtra === 'string' && fromExtra) {
+    return fromExtra.replace(/\/$/, '');
+  }
   if (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_API_URL) {
     return process.env.EXPO_PUBLIC_API_URL.replace(/\/$/, '');
   }
-  return 'http://localhost:3001';
-};
+  return DEFAULT_API_URL;
+}
 
 export type MasterRow = {
   Id: string;
@@ -79,13 +87,26 @@ const fetchWithTimeout = (url: string, options: RequestInit = {}, timeoutMs = 25
   return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(t));
 };
 
+function parseJsonResponse(text: string): ValidateResponse {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    throw new Error('Server returned an empty response. Check your connection and try again.');
+  }
+  try {
+    return JSON.parse(trimmed) as ValidateResponse;
+  } catch {
+    throw new Error('Server returned an invalid response. Check your connection and try again.');
+  }
+}
+
 export async function validateWorkbook(sheetId: string): Promise<ValidateResponse> {
   const url = `${getBaseUrl()}/api/validate?sheetId=${encodeURIComponent(sheetId)}`;
   let lastErr: unknown;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const res = await fetchWithTimeout(url);
-      const data = await res.json();
+      const text = await res.text();
+      const data = parseJsonResponse(text);
       if (!res.ok) return { valid: false, error: data.error || `HTTP ${res.status}` };
       return data;
     } catch (e) {

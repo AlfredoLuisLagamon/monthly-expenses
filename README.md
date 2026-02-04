@@ -70,7 +70,7 @@ In the app: open **Settings**, paste your Google Sheet ID (or full URL), tap **S
 
 **Note:** If `adb` is not found, install [Android Platform Tools](https://developer.android.com/studio/releases/platform-tools) and add the `platform-tools` folder to your PATH.
 
-For **deploying** the backend and app (Railway, Render, Fly.io, Vercel, EAS Build), see **[docs/HOSTING.md](docs/HOSTING.md)**.
+For **deploying** the backend and app (Railway, Render, Fly.io, Vercel, EAS Build), see **[docs/HOSTING.md](docs/HOSTING.md)**. For a **free always-on API** (no cold start), see **[docs/FLY-DEPLOY.md](docs/FLY-DEPLOY.md)**.
 
 ## Build APK (standalone Android app)
 
