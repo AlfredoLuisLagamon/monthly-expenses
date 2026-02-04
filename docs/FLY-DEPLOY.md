@@ -2,6 +2,8 @@
 
 Deploy the **server** only to Fly.io so the API runs 24/7 with no cold start. Then point your app/APK at the Fly URL.
 
+**Required:** Set the **GOOGLE_SERVICE_ACCOUNT_JSON** secret on Fly.io (same variable name as on Vercel). Without it, the API cannot access Google Sheets and validate/data will fail.
+
 ## 1. Install Fly CLI (Windows)
 
 In PowerShell (Run as Administrator if needed):
@@ -34,21 +36,34 @@ fly launch --no-deploy --name monthly-expenses-api --copy-config
 - When asked for a **region**, pick one close to you (e.g. `ord` for Chicago, `lax` for Los Angeles).
 - Say **no** to Postgres, and **no** to deploying now if it asks again.
 
-## 4. Set the Google credentials secret
+## 4. Set the Google credentials secret (required – same as Vercel)
 
-From the **server** directory (so Fly uses this app):
+On Fly.io there is no `service-account.json` file in the container. You must set the **same** env var you use on Vercel: **GOOGLE_SERVICE_ACCOUNT_JSON** (the full service account JSON as one line). Fly calls these "secrets".
+
+**Important:** The value must be **valid JSON** (double quotes around every key and string). If you paste a JavaScript object (e.g. `{type:service_account,...}` without quotes), the server will crash with `SyntaxError: Expected property name or '}' in JSON`. Use the command below so the value is correct.
+
+From the **project root** (monthly-expenses), run this to build the exact `fly secrets set` command with valid JSON (then run the printed command from the **server** folder):
+
+```powershell
+node -e "const fs=require('fs'); const j=fs.readFileSync('server/service-account.json','utf8'); const m=JSON.stringify(JSON.parse(j)); console.log('fly secrets set GOOGLE_SERVICE_ACCOUNT_JSON=' + JSON.stringify(m));"
+```
+
+Copy the output (one long line starting with `fly secrets set`), then:
 
 ```powershell
 cd server
-$json = (Get-Content service-account.json -Raw | ConvertFrom-Json | ConvertTo-Json -Compress)
-fly secrets set "GOOGLE_SERVICE_ACCOUNT_JSON=$json"
+# paste and run the printed command here
 ```
 
-If the command line is too long or you get quote errors, minify the JSON manually (e.g. [jsonminify.com](https://www.jsonminify.com/)), copy the single line, then run:
+**Alternative (use Fly dashboard):** If the printed command is too long to paste, create a minified one-line JSON file and paste it in the Fly.io dashboard (Secrets → Edit for `GOOGLE_SERVICE_ACCOUNT_JSON`):
 
 ```powershell
-fly secrets set GOOGLE_SERVICE_ACCOUNT_JSON='paste the minified line here'
+node -e "require('fs').writeFileSync('server/minified-credentials.json', JSON.stringify(JSON.parse(require('fs').readFileSync('server/service-account.json','utf8'))))"
 ```
+
+Open `server/minified-credentials.json`, copy the entire single line (valid JSON), and paste it as the secret value in the Fly dashboard. Then delete the file: `Remove-Item server/minified-credentials.json`.
+
+**Verify:** `fly secrets list` should show `GOOGLE_SERVICE_ACCOUNT_JSON`. After setting a secret, Fly redeploys the app automatically.
 
 ## 5. Deploy
 
