@@ -1,11 +1,13 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { STORAGE_KEYS, THEME_PRESETS, type ThemeId } from '../constants/storage';
+import { STORAGE_KEYS, THEME_PRESETS, type ThemeId, type ThemeMode } from '../constants/storage';
 
 export type ThemeColors = {
   primary: string;
+  onPrimary: string;
   background: string;
   surface: string;
+  surfaceElevated: string;
   text: string;
   textSecondary: string;
   paid: string;
@@ -15,17 +17,49 @@ export type ThemeColors = {
 
 function getColorsForTheme(themeId: ThemeId): ThemeColors {
   const preset = THEME_PRESETS.find((p) => p.id === themeId) ?? THEME_PRESETS[0];
-  const isDark = themeId === 'dark' || themeId === 'black';
-  const isBlack = themeId === 'black';
+  const mode: ThemeMode = preset.mode;
+
+  if (mode === 'light') {
+    return {
+      primary: preset.primary,
+      onPrimary: '#1c1917',
+      background: '#f5f5f4',
+      surface: '#fafaf9',
+      surfaceElevated: '#ffffff',
+      text: '#44403c',
+      textSecondary: '#78716c',
+      paid: '#6ee7b7',
+      unpaid: '#fde047',
+      border: '#e7e5e4',
+    };
+  }
+
+  if (mode === 'oled') {
+    return {
+      primary: preset.primary,
+      onPrimary: '#0c0a09',
+      background: '#000000',
+      surface: '#0c0a09',
+      surfaceElevated: '#1c1917',
+      text: '#e7e5e4',
+      textSecondary: '#a8a29e',
+      paid: '#6ee7b7',
+      unpaid: '#fde047',
+      border: '#292524',
+    };
+  }
+
   return {
     primary: preset.primary,
-    background: isBlack ? '#000000' : isDark ? '#0f172a' : '#f8fafc',
-    surface: isDark ? preset.surface : '#ffffff',
-    text: isDark ? '#f1f5f9' : '#0f172a',
-    textSecondary: isDark ? '#94a3b8' : '#64748b',
-    paid: '#22c55e',
-    unpaid: '#f59e0b',
-    border: isBlack ? '#1f1f1f' : isDark ? '#334155' : '#e2e8f0',
+    onPrimary: '#1c1917',
+    background: '#1c1b1f',
+    surface: '#2d2b32',
+    surfaceElevated: '#3d3b42',
+    text: '#e7e5e4',
+    textSecondary: '#a8a29e',
+    paid: '#6ee7b7',
+    unpaid: '#fde047',
+    border: '#3d3b42',
   };
 }
 
@@ -33,6 +67,7 @@ type ThemeContextValue = {
   themeId: ThemeId;
   setThemeId: (id: ThemeId) => void;
   colors: ThemeColors;
+  isDark: boolean;
 };
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -43,11 +78,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEYS.THEME).then((stored) => {
-      const id = (stored as ThemeId) ?? 'blue';
-      if (THEME_PRESETS.some((p) => p.id === id)) {
-        setThemeIdState(id as ThemeId);
-        setColors(getColorsForTheme(id as ThemeId));
-      }
+      const raw = stored ?? 'blue';
+      let id: ThemeId;
+      if (raw === 'dark') id = 'blueDark';
+      else if (raw === 'black') id = 'blueOled';
+      else if (THEME_PRESETS.some((p) => p.id === raw)) id = raw as ThemeId;
+      else id = 'blue';
+      setThemeIdState(id);
+      setColors(getColorsForTheme(id));
     });
   }, []);
 
@@ -57,7 +95,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     AsyncStorage.setItem(STORAGE_KEYS.THEME, id);
   }, []);
 
-  const value: ThemeContextValue = { themeId, setThemeId, colors };
+  const isDark = colors.background === '#000000' || colors.background === '#1c1b1f';
+  const value: ThemeContextValue = { themeId, setThemeId, colors, isDark };
   return (
     <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
   );

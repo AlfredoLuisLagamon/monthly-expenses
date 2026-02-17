@@ -10,6 +10,16 @@ export type PaymentMethodSummary = {
   totalAmount: number;
 };
 
+export type PayorSummary = {
+  payor: string;
+  paidCount: number;
+  unpaidCount: number;
+  paidAmount: number;
+  unpaidAmount: number;
+  totalAmount: number;
+  byPaymentMethod: PaymentMethodSummary[];
+};
+
 export type DashboardSummary = {
   totalPaid: number;
   totalUnpaid: number;
@@ -17,6 +27,7 @@ export type DashboardSummary = {
   paidCount: number;
   unpaidCount: number;
   byPaymentMethod: PaymentMethodSummary[];
+  byPayor: PayorSummary[];
 };
 
 function parseAmount(a: string): number {
@@ -24,7 +35,22 @@ function parseAmount(a: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-/** Join monthly rows with master to get payment method; aggregate for dashboard */
+function toPaymentMethodList(
+  byMethod: Map<string, { paidCount: number; unpaidCount: number; paidAmount: number; unpaidAmount: number }>
+): PaymentMethodSummary[] {
+  return Array.from(byMethod.entries())
+    .map(([method, rec]) => ({
+      method,
+      paidCount: rec.paidCount,
+      unpaidCount: rec.unpaidCount,
+      paidAmount: rec.paidAmount,
+      unpaidAmount: rec.unpaidAmount,
+      totalAmount: rec.paidAmount + rec.unpaidAmount,
+    }))
+    .sort((a, b) => b.totalAmount - a.totalAmount);
+}
+
+/** Join monthly rows with master to get payor and payment method; aggregate for dashboard */
 export function getDashboardSummary(data: ExpenseData | null): DashboardSummary | null {
   if (!data?.monthly?.length) return null;
   const masterByName = new Map<string, MasterRow>();
@@ -36,35 +62,82 @@ export function getDashboardSummary(data: ExpenseData | null): DashboardSummary 
     string,
     { paidCount: number; unpaidCount: number; paidAmount: number; unpaidAmount: number }
   >();
+  const byPayorMap = new Map<
+    string,
+    {
+      paidCount: number;
+      unpaidCount: number;
+      paidAmount: number;
+      unpaidAmount: number;
+      byMethod: Map<
+        string,
+        { paidCount: number; unpaidCount: number; paidAmount: number; unpaidAmount: number }
+      >;
+    }
+  >();
 
   data.monthly.forEach((row: MonthlyRow) => {
     const amount = parseAmount(row.Amount ?? '0');
-    const method = masterByName.get(row.ExpenseId?.trim() ?? '')?.['Payment Method'] ?? 'Other';
+    const master = masterByName.get(row.ExpenseId?.trim() ?? '');
+    const method = master?.['Payment Method'] ?? 'Other';
+    const payor = (master?.Payor?.trim() ?? '') || 'Other';
+
     if (!byMethod.has(method)) {
       byMethod.set(method, { paidCount: 0, unpaidCount: 0, paidAmount: 0, unpaidAmount: 0 });
     }
-    const rec = byMethod.get(method)!;
+    const methodRec = byMethod.get(method)!;
+
+    if (!byPayorMap.has(payor)) {
+      byPayorMap.set(payor, {
+        paidCount: 0,
+        unpaidCount: 0,
+        paidAmount: 0,
+        unpaidAmount: 0,
+        byMethod: new Map(),
+      });
+    }
+    const payorRec = byPayorMap.get(payor)!;
+    if (!payorRec.byMethod.has(method)) {
+      payorRec.byMethod.set(method, {
+        paidCount: 0,
+        unpaidCount: 0,
+        paidAmount: 0,
+        unpaidAmount: 0,
+      });
+    }
+    const payorMethodRec = payorRec.byMethod.get(method)!;
+
     if (row.Status === 'Paid') {
-      rec.paidCount += 1;
-      rec.paidAmount += amount;
+      methodRec.paidCount += 1;
+      methodRec.paidAmount += amount;
+      payorRec.paidCount += 1;
+      payorRec.paidAmount += amount;
+      payorMethodRec.paidCount += 1;
+      payorMethodRec.paidAmount += amount;
       totalPaid += amount;
     } else {
-      rec.unpaidCount += 1;
-      rec.unpaidAmount += amount;
+      methodRec.unpaidCount += 1;
+      methodRec.unpaidAmount += amount;
+      payorRec.unpaidCount += 1;
+      payorRec.unpaidAmount += amount;
+      payorMethodRec.unpaidCount += 1;
+      payorMethodRec.unpaidAmount += amount;
       totalUnpaid += amount;
     }
   });
 
-  const byPaymentMethod: PaymentMethodSummary[] = Array.from(byMethod.entries()).map(
-    ([method, rec]) => ({
-      method,
+  const byPaymentMethod = toPaymentMethodList(byMethod);
+  const byPayor: PayorSummary[] = Array.from(byPayorMap.entries())
+    .map(([payor, rec]) => ({
+      payor,
       paidCount: rec.paidCount,
       unpaidCount: rec.unpaidCount,
       paidAmount: rec.paidAmount,
       unpaidAmount: rec.unpaidAmount,
       totalAmount: rec.paidAmount + rec.unpaidAmount,
-    })
-  );
+      byPaymentMethod: toPaymentMethodList(rec.byMethod),
+    }))
+    .sort((a, b) => b.totalAmount - a.totalAmount);
 
   const paidCount = data.monthly.filter((r) => r.Status === 'Paid').length;
   const unpaidCount = data.monthly.filter((r) => r.Status === 'Un-Paid').length;
@@ -75,6 +148,7 @@ export function getDashboardSummary(data: ExpenseData | null): DashboardSummary 
     totalAll: totalPaid + totalUnpaid,
     paidCount,
     unpaidCount,
-    byPaymentMethod: byPaymentMethod.sort((a, b) => b.totalAmount - a.totalAmount),
+    byPaymentMethod,
+    byPayor,
   };
 }

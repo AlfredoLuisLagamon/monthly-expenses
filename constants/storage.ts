@@ -10,12 +10,18 @@ export const STORAGE_KEYS = {
 export type ChecklistSortId = 'nameAsc' | 'nameDesc' | 'amountDesc' | 'paidFirst' | 'unpaidFirst' | 'paymentMethod';
 export type ExpensesSortId = 'nameAsc' | 'nameDesc' | 'amountAsc' | 'amountDesc' | 'paymentMethod';
 
+export type ThemeMode = 'light' | 'dark' | 'oled';
+
 export const THEME_PRESETS = [
-  { id: 'blue', label: 'Blue', primary: '#2563eb', surface: '#eff6ff' },
-  { id: 'green', label: 'Green', primary: '#059669', surface: '#ecfdf5' },
-  { id: 'purple', label: 'Purple', primary: '#7c3aed', surface: '#f5f3ff' },
-  { id: 'dark', label: 'Dark', primary: '#818cf8', surface: '#1e1b4b' },
-  { id: 'black', label: 'Black', primary: '#a78bfa', surface: '#0a0a0a' },
+  { id: 'blue', label: 'Blue', mode: 'light' as ThemeMode, primary: '#7dd3fc' },
+  { id: 'blueDark', label: 'Blue (Dark)', mode: 'dark' as ThemeMode, primary: '#93c5fd' },
+  { id: 'blueOled', label: 'Blue (OLED)', mode: 'oled' as ThemeMode, primary: '#93c5fd' },
+  { id: 'green', label: 'Green', mode: 'light' as ThemeMode, primary: '#6ee7b7' },
+  { id: 'greenDark', label: 'Green (Dark)', mode: 'dark' as ThemeMode, primary: '#5eead4' },
+  { id: 'greenOled', label: 'Green (OLED)', mode: 'oled' as ThemeMode, primary: '#5eead4' },
+  { id: 'purple', label: 'Purple', mode: 'light' as ThemeMode, primary: '#c4b5fd' },
+  { id: 'purpleDark', label: 'Purple (Dark)', mode: 'dark' as ThemeMode, primary: '#a78bfa' },
+  { id: 'purpleOled', label: 'Purple (OLED)', mode: 'oled' as ThemeMode, primary: '#a78bfa' },
 ] as const;
 
 export type ThemeId = (typeof THEME_PRESETS)[number]['id'];

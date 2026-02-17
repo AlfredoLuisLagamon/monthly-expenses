@@ -1,5 +1,22 @@
-import { getSheetsClient, validateWorkbook, readSheet, appendRows, updateRow, deleteRow, ensureMonth, } from './sheets.js';
+import { getSheetsClient, validateWorkbook, readSheet, appendRows, updateRow, deleteRow, ensureMonth, ensureMonthFromData, } from './sheets.js';
 import { SHEET_NAMES, MASTER_HEADERS, MONTHLY_HEADERS, STATUS_PAID, STATUS_UNPAID, } from './constants.js';
+const DATA_CACHE_TTL_MS = 120 * 1000;
+const dataCache = new Map();
+function isRateLimitError(err) {
+    const e = err;
+    return e?.response?.status === 429 || e?.code === 429;
+}
+function invalidateDataCache(sheetId, monthOptional) {
+    if (monthOptional != null) {
+        dataCache.delete(`${sheetId}:${monthOptional}`);
+    }
+    else {
+        for (const k of dataCache.keys()) {
+            if (k.startsWith(`${sheetId}:`))
+                dataCache.delete(k);
+        }
+    }
+}
 function getSheets(req) {
     const creds = req.credentials;
     if (!creds)
@@ -27,6 +44,12 @@ export async function getData(req, res) {
         res.status(400).json({ error: 'Missing month (YYYY-MM)' });
         return;
     }
+    const cacheKey = `${sheetId}:${month}`;
+    const cached = dataCache.get(cacheKey);
+    if (cached && cached.expires > Date.now()) {
+        res.json(cached.payload);
+        return;
+    }
     try {
         const [masterData, monthlyData, paymentMethodsData, payorsData] = await Promise.all([
             readSheet(sheets, sheetId, SHEET_NAMES.MASTER, MASTER_HEADERS.length),
@@ -34,23 +57,34 @@ export async function getData(req, res) {
             readSheet(sheets, sheetId, SHEET_NAMES.PAYMENT_METHODS, 1),
             readSheet(sheets, sheetId, SHEET_NAMES.PAYORS, 1),
         ]);
-        const master = rowsToObjects(masterData, MASTER_HEADERS);
-        const monthlyAll = rowsToObjects(monthlyData, MONTHLY_HEADERS);
+        const { appended, newRows } = ensureMonthFromData(month, masterData, monthlyData);
+        if (newRows.length > 0) {
+            await appendRows(sheets, sheetId, SHEET_NAMES.MONTHLY, newRows);
+        }
+        const header = monthlyData?.[0] ?? ['MonthYear', 'ExpenseId', 'Status', 'Amount'];
+        const monthlyRowsMerged = [header].concat((monthlyData ?? []).slice(1), newRows);
+        const monthlyAll = rowsToObjects(monthlyRowsMerged, MONTHLY_HEADERS);
         const monthly = monthlyAll.filter((r) => r.MonthYear === month);
+        const master = rowsToObjects(masterData, MASTER_HEADERS);
         const paymentMethods = (paymentMethodsData.slice(1) ?? [])
             .map((row) => (row[0] ?? '').toString().trim())
             .filter(Boolean);
         const payors = (payorsData.slice(1) ?? [])
             .map((row) => (row[0] ?? '').toString().trim())
             .filter(Boolean);
-        res.json({
-            master,
-            monthly,
-            paymentMethods,
-            payors,
-        });
+        const payload = { master, monthly, paymentMethods, payors };
+        dataCache.set(cacheKey, { payload, expires: Date.now() + DATA_CACHE_TTL_MS });
+        res.json(payload);
     }
     catch (err) {
+        if (isRateLimitError(err)) {
+            res.set('Retry-After', '60');
+            res.status(503).json({
+                error: 'Too many requests. Please try again in a minute.',
+                code: 'RATE_LIMIT',
+            });
+            return;
+        }
         console.error('getData', err);
         res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to read sheet' });
     }
@@ -80,6 +114,14 @@ export async function postEnsureMonth(req, res) {
         res.json({ appended });
     }
     catch (err) {
+        if (isRateLimitError(err)) {
+            res.set('Retry-After', '60');
+            res.status(503).json({
+                error: 'Too many requests. Please try again in a minute.',
+                code: 'RATE_LIMIT',
+            });
+            return;
+        }
         console.error('ensureMonth', err);
         res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to ensure month' });
     }
@@ -105,9 +147,18 @@ export async function patchMonthlyStatus(req, res) {
     }
     try {
         await updateMonthlyStatusCell(sheets, sheetId, row, s);
+        invalidateDataCache(sheetId, month);
         res.json({ ok: true });
     }
     catch (err) {
+        if (isRateLimitError(err)) {
+            res.set('Retry-After', '60');
+            res.status(503).json({
+                error: 'Too many requests. Please try again in a minute.',
+                code: 'RATE_LIMIT',
+            });
+            return;
+        }
         console.error('patchMonthlyStatus', err);
         res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to update status' });
     }
@@ -135,6 +186,11 @@ export async function getValidate(req, res) {
         res.json(result);
     }
     catch (err) {
+        if (isRateLimitError(err)) {
+            res.set('Retry-After', '60');
+            res.status(503).json({ valid: false, error: 'Too many requests. Please try again in a minute.' });
+            return;
+        }
         console.error('validate', err);
         res.status(500).json({ valid: false, error: err instanceof Error ? err.message : 'Validation failed' });
     }
@@ -160,9 +216,18 @@ export async function postMaster(req, res) {
     }
     try {
         await appendRows(sheets, sheetId, SHEET_NAMES.MASTER, [[id, name, paymentMethod, payor, amount, order]]);
+        invalidateDataCache(sheetId);
         res.json({ ok: true });
     }
     catch (err) {
+        if (isRateLimitError(err)) {
+            res.set('Retry-After', '60');
+            res.status(503).json({
+                error: 'Too many requests. Please try again in a minute.',
+                code: 'RATE_LIMIT',
+            });
+            return;
+        }
         console.error('postMaster', err);
         res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to add expense' });
     }
@@ -189,9 +254,18 @@ export async function putMaster(req, res) {
     }
     try {
         await updateRow(sheets, sheetId, SHEET_NAMES.MASTER, rowIndex, [id, name, paymentMethod, payor, amount, order], MASTER_HEADERS.length);
+        invalidateDataCache(sheetId);
         res.json({ ok: true });
     }
     catch (err) {
+        if (isRateLimitError(err)) {
+            res.set('Retry-After', '60');
+            res.status(503).json({
+                error: 'Too many requests. Please try again in a minute.',
+                code: 'RATE_LIMIT',
+            });
+            return;
+        }
         console.error('putMaster', err);
         res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to update expense' });
     }
@@ -207,9 +281,18 @@ export async function deleteMaster(req, res) {
     }
     try {
         await deleteRow(sheets, sheetId, SHEET_NAMES.MASTER, rowIndex);
+        invalidateDataCache(sheetId);
         res.json({ ok: true });
     }
     catch (err) {
+        if (isRateLimitError(err)) {
+            res.set('Retry-After', '60');
+            res.status(503).json({
+                error: 'Too many requests. Please try again in a minute.',
+                code: 'RATE_LIMIT',
+            });
+            return;
+        }
         console.error('deleteMaster', err);
         res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to delete expense' });
     }
@@ -228,6 +311,14 @@ export async function postPaymentMethod(req, res) {
         res.json({ ok: true });
     }
     catch (err) {
+        if (isRateLimitError(err)) {
+            res.set('Retry-After', '60');
+            res.status(503).json({
+                error: 'Too many requests. Please try again in a minute.',
+                code: 'RATE_LIMIT',
+            });
+            return;
+        }
         console.error('postPaymentMethod', err);
         res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to add option' });
     }
@@ -246,6 +337,14 @@ export async function postPayor(req, res) {
         res.json({ ok: true });
     }
     catch (err) {
+        if (isRateLimitError(err)) {
+            res.set('Retry-After', '60');
+            res.status(503).json({
+                error: 'Too many requests. Please try again in a minute.',
+                code: 'RATE_LIMIT',
+            });
+            return;
+        }
         console.error('postPayor', err);
         res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to add option' });
     }
@@ -264,6 +363,14 @@ export async function deletePaymentMethod(req, res) {
         res.json({ ok: true });
     }
     catch (err) {
+        if (isRateLimitError(err)) {
+            res.set('Retry-After', '60');
+            res.status(503).json({
+                error: 'Too many requests. Please try again in a minute.',
+                code: 'RATE_LIMIT',
+            });
+            return;
+        }
         console.error('deletePaymentMethod', err);
         res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to delete option' });
     }
@@ -282,6 +389,14 @@ export async function deletePayor(req, res) {
         res.json({ ok: true });
     }
     catch (err) {
+        if (isRateLimitError(err)) {
+            res.set('Retry-After', '60');
+            res.status(503).json({
+                error: 'Too many requests. Please try again in a minute.',
+                code: 'RATE_LIMIT',
+            });
+            return;
+        }
         console.error('deletePayor', err);
         res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to delete option' });
     }

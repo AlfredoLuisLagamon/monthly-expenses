@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSheetId } from '../contexts/SheetIdContext';
 import { getCurrentMonthYear } from '../lib/month';
@@ -7,6 +7,8 @@ import * as api from '../lib/api';
 
 export type ExpenseData = api.DataResponse & { month: string };
 
+const STALE_MS = 90 * 1000;
+
 export function useExpenses() {
   const { sheetId } = useSheetId();
   const [month] = useState(() => getCurrentMonthYear());
@@ -14,20 +16,24 @@ export function useExpenses() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [updatingStatusRow, setUpdatingStatusRow] = useState<number | null>(null);
+  const lastFetchedAt = useRef<number>(0);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (forceRefresh = false) => {
     if (!sheetId) {
       setData(null);
       setLoading(false);
       setError(null);
       return;
     }
+    if (!forceRefresh && data && Date.now() - lastFetchedAt.current < STALE_MS) {
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      await api.ensureMonth(sheetId, month);
       const response = await api.fetchData(sheetId, month);
       const payload: ExpenseData = { ...response, month };
+      lastFetchedAt.current = Date.now();
       setData(payload);
       AsyncStorage.setItem(STORAGE_KEYS.CACHE_DATA, JSON.stringify(payload));
       AsyncStorage.setItem(STORAGE_KEYS.CACHE_MONTH, month);

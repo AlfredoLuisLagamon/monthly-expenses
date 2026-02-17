@@ -4,7 +4,8 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useSheetId } from '../../contexts/SheetIdContext';
 import { THEME_PRESETS } from '../../constants/storage';
-import { spacing, borderRadius } from '../../constants/layout';
+import { space, radius, elevation, touchTargetMin } from '../../constants/layout';
+import { typography } from '../../constants/typography';
 import { extractSheetId } from '../../lib/sheetId';
 import { validateWorkbook, getBaseUrl } from '../../lib/api';
 
@@ -72,16 +73,18 @@ export default function SettingsScreen() {
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
     >
-      <View style={[styles.section, { borderBottomColor: colors.border }]}>
+      <View style={[styles.sectionCard, styles.sectionCardElevation, { backgroundColor: colors.surface }]}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>API</Text>
         <Text style={[styles.apiUrl, { color: colors.textSecondary }]} numberOfLines={2}>
           {apiBaseUrl}
         </Text>
         <TouchableOpacity
-          style={[styles.testBtn, { borderColor: colors.border }]}
+          style={[styles.testBtn, styles.testBtnElevation, { backgroundColor: colors.surface }]}
           onPress={handleTestConnection}
           disabled={testingConnection}
+          activeOpacity={0.8}
         >
           {testingConnection ? (
             <ActivityIndicator size="small" color={colors.primary} />
@@ -90,13 +93,13 @@ export default function SettingsScreen() {
           )}
         </TouchableOpacity>
       </View>
-      <View style={[styles.section, { borderBottomColor: colors.border }]}>
+      <View style={[styles.sectionCard, styles.sectionCardElevation, { backgroundColor: colors.surface }]}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Google Sheet</Text>
         <Text style={[styles.hint, { color: colors.textSecondary }]}>
           Paste Sheet ID or full URL. Share the workbook with your service account (Editor).
         </Text>
         <TextInput
-          style={[styles.input, { backgroundColor: colors.surface, color: colors.text, borderColor: colors.border }]}
+          style={[styles.input, { backgroundColor: colors.background, color: colors.text }]}
           value={input}
           onChangeText={setInput}
           placeholder="Sheet ID or https://docs.google.com/..."
@@ -105,35 +108,37 @@ export default function SettingsScreen() {
           autoCorrect={false}
         />
         <TouchableOpacity
-          style={[styles.btn, { backgroundColor: colors.primary }]}
+          style={[styles.btn, styles.btnElevation, { backgroundColor: colors.primary }]}
           onPress={handleSaveSheetId}
           disabled={validating}
+          activeOpacity={0.8}
         >
           {validating ? (
             <>
-              <ActivityIndicator size="small" color="#fff" />
-              <Text style={styles.btnText}>Validating…</Text>
+              <ActivityIndicator size="small" color={colors.onPrimary} />
+              <Text style={[styles.btnText, { color: colors.onPrimary }]}>Validating…</Text>
             </>
           ) : (
-            <Text style={styles.btnText}>Save & validate</Text>
+            <Text style={[styles.btnText, { color: colors.onPrimary }]}>Save & validate</Text>
           )}
         </TouchableOpacity>
       </View>
 
-      <View style={[styles.section, { borderBottomColor: colors.border }]}>
+      <View style={[styles.sectionCard, styles.sectionCardElevation, { backgroundColor: colors.surface }]}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Manage options</Text>
         <Text style={[styles.hint, { color: colors.textSecondary }]}>
           Add or remove Payment methods and Payors used in expenses.
         </Text>
         <TouchableOpacity
-          style={[styles.linkBtn, { borderColor: colors.border }]}
+          style={[styles.linkBtn, styles.linkBtnElevation, { backgroundColor: colors.surface }]}
           onPress={() => router.push('/manage-options')}
+          activeOpacity={0.8}
         >
           <Text style={[styles.linkText, { color: colors.primary }]}>Open Manage options</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={[styles.section, { borderBottomColor: colors.border }]}>
+      <View style={[styles.sectionCard, styles.sectionCardElevation, { backgroundColor: colors.surface }]}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Theme</Text>
         <View style={styles.themeRow}>
           {THEME_PRESETS.map((preset) => (
@@ -141,17 +146,18 @@ export default function SettingsScreen() {
               key={preset.id}
               style={[
                 styles.themeChip,
+                themeId === preset.id && styles.themeChipElevation,
                 {
-                  backgroundColor: themeId === preset.id ? preset.primary : colors.surface,
-                  borderColor: colors.border,
+                  backgroundColor: themeId === preset.id ? preset.primary : colors.background,
                 },
               ]}
               onPress={() => setThemeId(preset.id)}
+              activeOpacity={0.8}
             >
               <Text
                 style={[
                   styles.themeChipText,
-                  { color: themeId === preset.id ? '#fff' : colors.text },
+                  { color: themeId === preset.id ? colors.onPrimary : colors.text },
                 ]}
               >
                 {preset.label}
@@ -161,7 +167,7 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      <View style={styles.section}>
+      <View style={[styles.sectionCard, styles.sectionCardElevation, { backgroundColor: colors.surface }]}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>About</Text>
         <Text style={[styles.hint, { color: colors.textSecondary }]}>
           Monthly recurring expenses checklist. Data is stored in your Google Sheet.
@@ -173,31 +179,62 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { padding: spacing.base, paddingBottom: spacing.xxl },
-  section: { paddingVertical: spacing.base, borderBottomWidth: 1 },
-  sectionTitle: { fontSize: 18, fontWeight: '600', marginBottom: spacing.sm },
-  hint: { fontSize: 14, marginBottom: spacing.md },
+  content: { padding: space.base, paddingBottom: space.xxl, gap: space.base },
+  sectionCard: {
+    padding: space.xl,
+    borderRadius: radius.lg,
+    marginBottom: space.base,
+  },
+  sectionCardElevation: { ...elevation.card },
+  sectionTitle: { ...typography.titleLarge, marginBottom: space.sm },
+  hint: { ...typography.bodyMedium, marginBottom: space.md },
   input: {
-    borderWidth: 1,
-    borderRadius: borderRadius.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    fontSize: 16,
-    marginBottom: spacing.md,
+    borderRadius: radius.md,
+    paddingHorizontal: space.base,
+    paddingVertical: space.md,
+    marginBottom: space.base,
+    ...typography.bodyLarge,
   },
-  btn: { flexDirection: 'row', paddingVertical: spacing.base, borderRadius: borderRadius.sm, alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
-  btnText: { color: '#fff', fontWeight: '600' },
-  apiUrl: { fontSize: 12, marginBottom: spacing.sm },
-  testBtn: { borderWidth: 1, paddingVertical: spacing.sm, borderRadius: borderRadius.sm, alignItems: 'center', marginBottom: spacing.sm },
+  btn: {
+    flexDirection: 'row',
+    paddingVertical: space.base,
+    minHeight: touchTargetMin,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space.sm,
+  },
+  btnElevation: { ...elevation.raised },
+  btnText: { ...typography.labelLarge, fontWeight: '600' },
+  apiUrl: { ...typography.bodySmall, marginBottom: space.sm },
+  testBtn: {
+    paddingVertical: space.sm,
+    paddingHorizontal: space.base,
+    minHeight: touchTargetMin,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: space.sm,
+  },
+  testBtnElevation: { ...elevation.card },
   testBtnText: { fontWeight: '600' },
-  linkBtn: { borderWidth: 1, paddingVertical: spacing.md, borderRadius: borderRadius.sm, alignItems: 'center' },
-  linkText: { fontWeight: '600' },
-  themeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  themeChip: {
-    paddingHorizontal: spacing.base,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.sm,
-    borderWidth: 1,
+  linkBtn: {
+    paddingVertical: space.md,
+    minHeight: touchTargetMin,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  themeChipText: { fontSize: 14, fontWeight: '500' },
+  linkBtnElevation: { ...elevation.card },
+  linkText: { fontWeight: '600' },
+  themeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  themeChip: {
+    paddingHorizontal: space.base,
+    paddingVertical: space.sm,
+    borderRadius: radius.full,
+    minHeight: 36,
+    justifyContent: 'center',
+  },
+  themeChipElevation: { ...elevation.raised },
+  themeChipText: { ...typography.labelLarge },
 });

@@ -103,31 +103,39 @@ export async function deleteRow(sheets, spreadsheetId, sheetName, rowIndex) {
         },
     });
 }
-/** Ensure Monthly has rows for the given month for every Master row; returns count appended */
-export async function ensureMonth(sheets, spreadsheetId, monthYear) {
-    const masterRows = await readSheet(sheets, spreadsheetId, SHEET_NAMES.MASTER, MASTER_HEADERS.length);
-    const dataRows = masterRows.slice(1).filter((row) => row.some((c) => c.trim() !== ''));
+/**
+ * Ensure month logic using already-fetched Master and Monthly rows.
+ * Returns { appended, newRows } so caller can merge newRows into monthly without re-reading.
+ */
+export function ensureMonthFromData(monthYear, masterRows, monthlyRows) {
+    const dataRows = (masterRows ?? []).slice(1).filter((row) => row?.some((c) => String(c ?? '').trim() !== ''));
     if (dataRows.length === 0)
-        return 0;
-    const monthlyRows = await readSheet(sheets, spreadsheetId, SHEET_NAMES.MONTHLY, MONTHLY_HEADERS.length);
-    const existingForMonth = monthlyRows
+        return { appended: 0, newRows: [] };
+    const existingForMonth = (monthlyRows ?? [])
         .slice(1)
-        .filter((row) => (row[0] ?? '').toString().trim() === monthYear);
+        .filter((row) => row?.[0] != null && (row[0] ?? '').toString().trim() === monthYear);
     if (existingForMonth.length >= dataRows.length)
-        return 0;
+        return { appended: 0, newRows: [] };
     const masterNames = dataRows.map((row) => (row[1] ?? '').toString().trim());
     const existingNames = new Set(existingForMonth.map((row) => (row[1] ?? '').toString().trim()));
-    const toAppend = [];
+    const newRows = [];
     for (let i = 0; i < masterNames.length; i++) {
         const name = masterNames[i];
         if (!name || existingNames.has(name))
             continue;
         const amount = dataRows[i][4] ?? '';
-        toAppend.push([monthYear, name, STATUS_UNPAID, amount]);
+        newRows.push([monthYear, name, STATUS_UNPAID, amount]);
         existingNames.add(name);
     }
-    if (toAppend.length > 0) {
-        await appendRows(sheets, spreadsheetId, SHEET_NAMES.MONTHLY, toAppend);
+    return { appended: newRows.length, newRows };
+}
+/** Ensure Monthly has rows for the given month for every Master row; returns count appended (used by POST /api/ensure-month). */
+export async function ensureMonth(sheets, spreadsheetId, monthYear) {
+    const masterRows = await readSheet(sheets, spreadsheetId, SHEET_NAMES.MASTER, MASTER_HEADERS.length);
+    const monthlyRows = await readSheet(sheets, spreadsheetId, SHEET_NAMES.MONTHLY, MONTHLY_HEADERS.length);
+    const { appended, newRows } = ensureMonthFromData(monthYear, masterRows, monthlyRows);
+    if (newRows.length > 0) {
+        await appendRows(sheets, spreadsheetId, SHEET_NAMES.MONTHLY, newRows);
     }
-    return toAppend.length;
+    return appended;
 }

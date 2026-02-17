@@ -19,7 +19,9 @@ import {
   deletePaymentMethodOption,
   deletePayorOption,
 } from '../lib/api';
-import { spacing, borderRadius, iconSize } from '../constants/layout';
+import { space, radius, headerPaddingTop } from '../constants/layout';
+import { typography } from '../constants/typography';
+import { LoadingView } from '../components/LoadingView';
 
 export default function ManageOptionsScreen() {
   const { colors } = useTheme();
@@ -43,7 +45,7 @@ export default function ManageOptionsScreen() {
     try {
       await addPaymentMethod(sheetId, name);
       setNewPaymentMethod('');
-      await reload();
+      await reload(true);
     } catch (e) {
       Alert.alert('Error', e instanceof Error ? e.message : 'Failed to add');
     } finally {
@@ -58,7 +60,7 @@ export default function ManageOptionsScreen() {
     try {
       await addPayor(sheetId, name);
       setNewPayor('');
-      await reload();
+      await reload(true);
     } catch (e) {
       Alert.alert('Error', e instanceof Error ? e.message : 'Failed to add');
     } finally {
@@ -107,22 +109,20 @@ export default function ManageOptionsScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
           <Text style={[styles.back, { color: colors.primary }]}>Back</Text>
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.text }]}>Manage options</Text>
-        <View style={{ width: 50 }} />
+        <View style={styles.headerSpacer} />
       </View>
       {!sheetId ? (
-        <View style={styles.centered}>
+        <View style={[styles.centered, { backgroundColor: colors.background }]}>
           <Text style={[styles.hint, { color: colors.textSecondary }]}>
             Set your Sheet ID in Settings first.
           </Text>
         </View>
       ) : loading && !data ? (
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
+        <LoadingView message="Loading…" />
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
           <View style={[styles.section, { borderBottomColor: colors.border }]}>
@@ -139,14 +139,15 @@ export default function ManageOptionsScreen() {
                 style={[styles.addBtn, { backgroundColor: colors.primary }]}
                 onPress={handleAddPaymentMethod}
                 disabled={!newPaymentMethod.trim() || addingPaymentMethod}
+                activeOpacity={0.8}
               >
                 {addingPaymentMethod ? (
                   <>
-                    <ActivityIndicator size="small" color="#fff" />
-                    <Text style={styles.addBtnText}>Adding…</Text>
+                    <ActivityIndicator size="small" color={colors.onPrimary} />
+                    <Text style={[styles.addBtnText, { color: colors.onPrimary }]}>Adding…</Text>
                   </>
                 ) : (
-                  <Text style={styles.addBtnText}>Add</Text>
+                  <Text style={[styles.addBtnText, { color: colors.onPrimary }]}>Add</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -156,7 +157,7 @@ export default function ManageOptionsScreen() {
                 {removingPaymentMethodIndex === i ? (
                   <ActivityIndicator size="small" color={colors.unpaid} />
                 ) : (
-                  <TouchableOpacity onPress={() => handleDeletePaymentMethod(i)}>
+                  <TouchableOpacity onPress={() => handleDeletePaymentMethod(i)} activeOpacity={0.8}>
                     <Text style={[styles.removeText, { color: colors.unpaid }]}>Remove</Text>
                   </TouchableOpacity>
                 )}
@@ -177,14 +178,15 @@ export default function ManageOptionsScreen() {
                 style={[styles.addBtn, { backgroundColor: colors.primary }]}
                 onPress={handleAddPayor}
                 disabled={!newPayor.trim() || addingPayor}
+                activeOpacity={0.8}
               >
                 {addingPayor ? (
                   <>
-                    <ActivityIndicator size="small" color="#fff" />
-                    <Text style={styles.addBtnText}>Adding…</Text>
+                    <ActivityIndicator size="small" color={colors.onPrimary} />
+                    <Text style={[styles.addBtnText, { color: colors.onPrimary }]}>Adding…</Text>
                   </>
                 ) : (
-                  <Text style={styles.addBtnText}>Add</Text>
+                  <Text style={[styles.addBtnText, { color: colors.onPrimary }]}>Add</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -194,7 +196,7 @@ export default function ManageOptionsScreen() {
                 {removingPayorIndex === i ? (
                   <ActivityIndicator size="small" color={colors.unpaid} />
                 ) : (
-                  <TouchableOpacity onPress={() => handleDeletePayor(i)}>
+                  <TouchableOpacity onPress={() => handleDeletePayor(i)} activeOpacity={0.8}>
                     <Text style={[styles.removeText, { color: colors.unpaid }]}>Remove</Text>
                   </TouchableOpacity>
                 )}
@@ -213,43 +215,44 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.base,
-    paddingVertical: spacing.md,
-    paddingTop: 56,
+    paddingHorizontal: space.base,
+    paddingVertical: space.md,
+    paddingTop: headerPaddingTop,
     borderBottomWidth: 1,
   },
-  back: { fontSize: 16 },
-  title: { fontSize: 18, fontWeight: '600' },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing.xl },
-  hint: { fontSize: 14 },
-  content: { padding: spacing.base, paddingBottom: spacing.xxl },
-  section: { paddingVertical: spacing.base, borderBottomWidth: 1 },
-  sectionTitle: { fontSize: 16, fontWeight: '600', marginBottom: spacing.md },
-  row: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
+  headerSpacer: { width: space.xxl + 2 },
+  back: { ...typography.bodyLarge },
+  title: { ...typography.titleLarge },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: space.xl },
+  hint: { ...typography.bodyMedium },
+  content: { padding: space.base, paddingBottom: space.xxl },
+  section: { paddingVertical: space.base, borderBottomWidth: 1 },
+  sectionTitle: { ...typography.titleMedium, marginBottom: space.md },
+  row: { flexDirection: 'row', gap: space.sm, marginBottom: space.md },
   input: {
     flex: 1,
     borderWidth: 1,
-    borderRadius: borderRadius.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    fontSize: 16,
+    borderRadius: radius.sm,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm + 2,
+    ...typography.bodyLarge,
   },
   addBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.sm,
+    gap: space.xs,
+    paddingHorizontal: space.lg,
+    borderRadius: radius.sm,
   },
-  addBtnText: { color: '#fff', fontWeight: '600' },
+  addBtnText: { ...typography.labelLarge, fontWeight: '600' },
   optionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: spacing.sm + 2,
+    paddingVertical: space.sm + 2,
     borderBottomWidth: 1,
   },
-  optionText: { fontSize: 16 },
-  removeText: { fontSize: 14 },
+  optionText: { ...typography.bodyLarge },
+  removeText: { ...typography.bodyMedium },
 });

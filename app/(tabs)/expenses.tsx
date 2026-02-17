@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,8 +7,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  Modal,
-  Pressable,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -17,10 +15,17 @@ import { useSheetId } from '../../contexts/SheetIdContext';
 import { useExpenses } from '../../hooks/useExpenses';
 import { deleteMasterRow } from '../../lib/api';
 import { sortMaster } from '../../lib/sort';
-import { spacing, borderRadius, iconSize } from '../../constants/layout';
+import { formatMonthYear } from '../../lib/month';
+import { space, radius, icon, contentBottomWithFab, touchTargetMin, elevation } from '../../constants/layout';
+import { typography } from '../../constants/typography';
 import { STORAGE_KEYS, type ExpensesSortId } from '../../constants/storage';
 import type { MasterRow } from '../../lib/api';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { LoadingView } from '../../components/LoadingView';
+import { SortBar } from '../../components/SortBar';
+import { PayorTabs } from '../../components/PayorTabs';
+import { SortModal } from '../../components/SortModal';
+import { impactFeedback } from '../../lib/haptics';
 
 const SORT_OPTIONS: { id: ExpensesSortId; label: string }[] = [
   { id: 'nameAsc', label: 'Name A–Z' },
@@ -45,8 +50,8 @@ function MasterRowItem({
 }) {
   const { colors } = useTheme();
   return (
-    <View style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <TouchableOpacity style={styles.rowMain} onPress={onEdit} disabled={isDeleting}>
+    <View style={[styles.row, styles.rowElevation, { backgroundColor: colors.surface }]}>
+      <TouchableOpacity style={styles.rowMain} onPress={onEdit} disabled={isDeleting} activeOpacity={0.8}>
         <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
           {row.Name}
         </Text>
@@ -57,8 +62,8 @@ function MasterRowItem({
       {isDeleting ? (
         <ActivityIndicator size="small" color={colors.unpaid} style={styles.deleteSpinner} />
       ) : (
-        <TouchableOpacity onPress={onDelete} hitSlop={12}>
-          <MaterialCommunityIcons name="delete-outline" size={iconSize.md} color={colors.unpaid} />
+        <TouchableOpacity onPress={onDelete} hitSlop={12} activeOpacity={0.8}>
+          <MaterialCommunityIcons name="delete-outline" size={icon.md} color={colors.unpaid} />
         </TouchableOpacity>
       )}
     </View>
@@ -69,7 +74,7 @@ export default function ExpensesScreen() {
   const { colors } = useTheme();
   const { sheetId } = useSheetId();
   const router = useRouter();
-  const { data, loading, error, reload } = useExpenses();
+  const { data, loading, error, reload, month } = useExpenses();
   const [sortId, setSortId] = useState<ExpensesSortId>('nameAsc');
   const [sortModalVisible, setSortModalVisible] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -95,8 +100,8 @@ export default function ExpensesScreen() {
   if (!data?.master && !loading) {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <MaterialCommunityIcons name="cloud-off-outline" size={48} color={colors.textSecondary} />
-        <Text style={[styles.emptyText, { color: colors.text, marginTop: spacing.base }]}>
+        <MaterialCommunityIcons name="cloud-off-outline" size={icon.xxl} color={colors.textSecondary} />
+        <Text style={[styles.emptyText, { color: colors.text, marginTop: space.base }]}>
           Set your Google Sheet ID in Settings first.
         </Text>
       </View>
@@ -104,7 +109,52 @@ export default function ExpensesScreen() {
   }
 
   const master = data?.master ?? [];
-  const sortedMaster = sortMaster(master, sortId);
+  const payorsFromData = data?.payors ?? [];
+
+  const { payorTabs, groupedByPayor } = useMemo(() => {
+    if (!master.length) {
+      return { payorTabs: [] as string[], groupedByPayor: new Map<string, { row: MasterRow; sheetRowIndex: number }[]>() };
+    }
+    const withIndex = master.map((row, i) => ({ row, sheetRowIndex: i + 2 }));
+    const byPayor = new Map<string, { row: MasterRow; sheetRowIndex: number }[]>();
+    withIndex.forEach(({ row, sheetRowIndex }) => {
+      const payor = (row.Payor?.trim() ?? '') || 'Other';
+      if (!byPayor.has(payor)) byPayor.set(payor, []);
+      byPayor.get(payor)!.push({ row, sheetRowIndex });
+    });
+    let tabOrder = [...payorsFromData];
+    if (byPayor.has('Other') && !payorsFromData.includes('Other')) tabOrder.push('Other');
+    if (tabOrder.length === 0) {
+      tabOrder = Array.from(byPayor.keys()).sort((a, b) =>
+        a === 'Other' ? 1 : b === 'Other' ? -1 : a.localeCompare(b)
+      );
+    }
+    const tabs = tabOrder;
+    const grouped = new Map<string, { row: MasterRow; sheetRowIndex: number }[]>();
+    tabs.forEach((payor) => {
+      const items = byPayor.get(payor) ?? [];
+      const sorted = sortMaster(items.map((x) => x.row), sortId);
+      const sortedWithIndex = sorted
+        .map((row) => {
+          const found = items.find((x) => x.row === row);
+          return found ? { row: found.row, sheetRowIndex: found.sheetRowIndex } : null;
+        })
+        .filter((x): x is { row: MasterRow; sheetRowIndex: number } => x !== null);
+      grouped.set(payor, sortedWithIndex);
+    });
+    return { payorTabs: tabs, groupedByPayor: grouped };
+  }, [master, payorsFromData, sortId]);
+
+  const [selectedPayor, setSelectedPayor] = useState<string>('');
+  useEffect(() => {
+    if (payorTabs.length > 0) {
+      setSelectedPayor((prev) => (payorTabs.includes(prev) ? prev : payorTabs[0]));
+    } else {
+      setSelectedPayor('');
+    }
+  }, [payorTabs]);
+
+  const currentList = groupedByPayor.get(selectedPayor) ?? [];
   const currentSortLabel = SORT_OPTIONS.find((o) => o.id === sortId)?.label ?? 'Sort';
 
   const handleAdd = () => router.push({ pathname: '/expense-form', params: {} });
@@ -125,6 +175,7 @@ export default function ExpensesScreen() {
 
   const handleDelete = (item: MasterRow, sheetRowIndex: number) => {
     if (!sheetId) return;
+    impactFeedback('medium');
     Alert.alert('Delete expense', `Remove "${item.Name}" from the list?`, [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -149,118 +200,107 @@ export default function ExpensesScreen() {
         </View>
       )}
       {loading && !data ? (
-        <View style={[styles.centered, { backgroundColor: colors.background }]}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading…</Text>
-        </View>
+        <LoadingView message="Loading…" />
       ) : (
         <>
-          <TouchableOpacity
-            style={[styles.sortBar, { borderBottomColor: colors.border }]}
-            onPress={() => setSortModalVisible(true)}
-          >
-            <MaterialCommunityIcons name="sort" size={iconSize.sm} color={colors.primary} />
-            <Text style={[styles.sortBarText, { color: colors.primary }]}>{currentSortLabel}</Text>
-          </TouchableOpacity>
+          <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+            <SortBar
+              title={formatMonthYear(month)}
+              sortLabel={currentSortLabel}
+              onPressSort={() => setSortModalVisible(true)}
+            />
+            <PayorTabs
+              tabs={payorTabs}
+              selectedPayor={selectedPayor}
+              onSelect={setSelectedPayor}
+              getCount={(payor) => (groupedByPayor.get(payor) ?? []).length}
+            />
+          </View>
           <FlatList
-            data={sortedMaster}
-            keyExtractor={(item, i) => `${item.Id}-${i}`}
-            renderItem={({ item, index }) => {
-              const sheetRowIndex = master.indexOf(item) + 2;
+            data={currentList}
+            keyExtractor={(item, i) => `${item.row?.Id ?? i}-${item.sheetRowIndex}-${i}`}
+            renderItem={({ item }) => {
+              if (!item?.row || item.sheetRowIndex == null) return null;
               return (
                 <MasterRowItem
-                  row={item}
-                  sheetRowIndex={sheetRowIndex}
-                  onEdit={() => handleEdit(item, sheetRowIndex)}
-                  onDelete={() => handleDelete(item, sheetRowIndex)}
-                  isDeleting={deletingId === sheetRowIndex}
+                  row={item.row}
+                  sheetRowIndex={item.sheetRowIndex}
+                  onEdit={() => handleEdit(item.row, item.sheetRowIndex)}
+                  onDelete={() => handleDelete(item.row, item.sheetRowIndex)}
+                  isDeleting={deletingId === item.sheetRowIndex}
                 />
               );
             }}
             contentContainerStyle={styles.list}
             ListEmptyComponent={
               <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                No expenses yet. Add one below.
+                {payorTabs.length > 0 && selectedPayor
+                  ? `No expenses for ${selectedPayor}. Add one below.`
+                  : 'No expenses yet. Add one below.'}
               </Text>
             }
           />
         </>
       )}
       <TouchableOpacity
-        style={[styles.fab, { backgroundColor: colors.primary }]}
+        style={[styles.fab, styles.fabElevation, { backgroundColor: colors.primary }]}
         onPress={handleAdd}
+        activeOpacity={0.8}
       >
-        <MaterialCommunityIcons name="plus" size={24} color="#fff" />
-        <Text style={styles.fabText}>Add expense</Text>
+        <MaterialCommunityIcons name="plus" size={icon.md} color={colors.onPrimary} />
+        <Text style={[styles.fabText, { color: colors.onPrimary }]}>Add expense</Text>
       </TouchableOpacity>
-      <Modal visible={sortModalVisible} transparent animationType="fade">
-        <Pressable style={styles.modalOverlay} onPress={() => setSortModalVisible(false)}>
-          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>Sort by</Text>
-            {SORT_OPTIONS.map((opt) => (
-              <TouchableOpacity
-                key={opt.id}
-                style={[styles.modalOption, sortId === opt.id && { backgroundColor: colors.primary + '20' }]}
-                onPress={() => setSort(opt.id)}
-              >
-                <Text style={[styles.modalOptionText, { color: colors.text }]}>{opt.label}</Text>
-                {sortId === opt.id && (
-                  <MaterialCommunityIcons name="check" size={iconSize.md} color={colors.primary} />
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </Pressable>
-      </Modal>
+      <SortModal
+        visible={sortModalVisible}
+        onClose={() => setSortModalVisible(false)}
+        options={SORT_OPTIONS}
+        selectedId={sortId}
+        onSelect={(id) => setSort(id)}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing.xl },
-  loadingText: { marginTop: spacing.sm },
-  banner: { padding: spacing.md, paddingHorizontal: spacing.base },
-  errorText: { fontSize: 14 },
-  sortBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.base,
-    borderBottomWidth: 1,
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: space.xl },
+  banner: { padding: space.md, paddingHorizontal: space.base },
+  errorText: { ...typography.bodyMedium },
+  header: {
+    paddingHorizontal: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  sortBarText: { fontSize: 13, fontWeight: '500' },
-  list: { padding: spacing.base, paddingBottom: 88 },
+  list: { padding: space.base, paddingTop: space.base, paddingBottom: contentBottomWithFab },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.base,
-    borderRadius: borderRadius.sm,
-    borderWidth: 1,
-    marginBottom: spacing.sm,
+    minHeight: touchTargetMin + space.sm,
+    paddingVertical: space.md,
+    paddingHorizontal: space.base,
+    borderRadius: radius.md,
+    marginBottom: space.sm,
   },
+  rowElevation: { ...elevation.card },
   rowMain: { flex: 1 },
-  name: { fontSize: 16, fontWeight: '600' },
-  meta: { fontSize: 12, marginTop: spacing.xs },
-  deleteSpinner: { marginLeft: spacing.md },
-  emptyText: { textAlign: 'center', paddingVertical: spacing.xl },
+  name: { ...typography.titleMedium },
+  meta: { ...typography.bodySmall, marginTop: space.xs },
+  deleteSpinner: { marginLeft: space.md },
+  emptyText: { textAlign: 'center', paddingVertical: space.xl },
   fab: {
     position: 'absolute',
-    bottom: spacing.xl,
-    left: spacing.base,
-    right: spacing.base,
+    bottom: space.xl,
+    left: space.base,
+    right: space.base,
     flexDirection: 'row',
-    paddingVertical: spacing.base,
-    borderRadius: borderRadius.sm,
+    paddingVertical: space.base,
+    borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
+    gap: space.sm,
+    minHeight: 56,
   },
-  fabText: { color: '#fff', fontWeight: '600', fontSize: 16 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', padding: spacing.xl },
-  modalContent: { width: '100%', maxWidth: 320, borderRadius: borderRadius.md, padding: spacing.base },
-  modalTitle: { fontSize: 18, fontWeight: '600', marginBottom: spacing.sm },
-  modalOption: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.md, paddingHorizontal: spacing.sm, borderRadius: borderRadius.sm },
-  modalOptionText: { fontSize: 16 },
+  fabElevation: { ...elevation.overlay },
+  fabText: { ...typography.labelLarge, fontWeight: '600' },
 });

@@ -14,7 +14,8 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useSheetId } from '../contexts/SheetIdContext';
 import { useExpenses } from '../hooks/useExpenses';
 import { addMaster, updateMaster } from '../lib/api';
-import { spacing, borderRadius } from '../constants/layout';
+import { space, radius, headerPaddingTop, touchTargetMin } from '../constants/layout';
+import { typography } from '../constants/typography';
 
 type Params = {
   id?: string;
@@ -81,7 +82,7 @@ export default function ExpenseFormScreen() {
           Amount: amount.trim(),
         });
       }
-      await reload();
+      await reload(true);
       router.back();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save');
@@ -93,13 +94,13 @@ export default function ExpenseFormScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
           <Text style={[styles.cancel, { color: colors.primary }]}>Cancel</Text>
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.text }]}>
           {saving ? 'Saving…' : isEdit ? 'Edit expense' : 'Add expense'}
         </Text>
-        <TouchableOpacity onPress={handleSave} disabled={saving}>
+        <TouchableOpacity onPress={handleSave} disabled={saving} activeOpacity={0.8}>
           {saving ? (
             <ActivityIndicator size="small" color={colors.primary} />
           ) : (
@@ -132,8 +133,9 @@ export default function ExpenseFormScreen() {
                 { backgroundColor: paymentMethod === pm ? colors.primary : colors.surface, borderColor: colors.border },
               ]}
               onPress={() => setPaymentMethod(pm)}
+              activeOpacity={0.8}
             >
-              <Text style={[styles.chipText, { color: paymentMethod === pm ? '#fff' : colors.text }]}>
+              <Text style={[styles.chipText, { color: paymentMethod === pm ? colors.onPrimary : colors.text }]}>
                 {pm}
               </Text>
             </TouchableOpacity>
@@ -154,8 +156,9 @@ export default function ExpenseFormScreen() {
                 { backgroundColor: payor === p ? colors.primary : colors.surface, borderColor: colors.border },
               ]}
               onPress={() => setPayor(p)}
+              activeOpacity={0.8}
             >
-              <Text style={[styles.chipText, { color: payor === p ? '#fff' : colors.text }]}>
+              <Text style={[styles.chipText, { color: payor === p ? colors.onPrimary : colors.text }]}>
                 {p}
               </Text>
             </TouchableOpacity>
@@ -181,34 +184,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.base,
-    paddingVertical: spacing.md,
+    paddingHorizontal: space.base,
+    paddingVertical: space.md,
     paddingTop: 56,
     borderBottomWidth: 1,
   },
-  cancel: { fontSize: 16 },
-  title: { fontSize: 18, fontWeight: '600' },
-  save: { fontSize: 16, fontWeight: '600' },
+  cancel: { ...typography.bodyLarge },
+  title: { ...typography.titleLarge },
+  save: { ...typography.bodyLarge, fontWeight: '600' },
   scroll: { flex: 1 },
-  content: { padding: spacing.base, paddingBottom: spacing.xxl },
-  errorBanner: { padding: spacing.md, borderRadius: borderRadius.sm, marginBottom: spacing.base },
-  errorText: { fontSize: 14 },
-  label: { fontSize: 12, marginBottom: spacing.xs, marginTop: spacing.md },
+  content: { padding: space.base, paddingBottom: space.xxl },
+  errorBanner: { padding: space.md, borderRadius: radius.sm, marginBottom: space.base },
+  errorText: { ...typography.bodyMedium },
+  label: { ...typography.labelMedium, marginBottom: space.xs, marginTop: space.md },
   input: {
     borderWidth: 1,
-    borderRadius: borderRadius.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    fontSize: 16,
+    borderRadius: radius.sm,
+    paddingHorizontal: space.md,
+    paddingVertical: space.md,
+    ...typography.bodyLarge,
   },
-  chipScroll: { marginVertical: spacing.sm, maxHeight: 44 },
+  chipScroll: { marginVertical: space.sm, maxHeight: touchTargetMin },
   chip: {
-    paddingHorizontal: spacing.base,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.sm,
+    paddingHorizontal: space.base,
+    paddingVertical: space.sm,
+    borderRadius: radius.sm,
     borderWidth: 1,
-    marginRight: spacing.sm,
+    marginRight: space.sm,
   },
-  chipText: { fontSize: 14, fontWeight: '500' },
-  hint: { fontSize: 12, marginTop: spacing.xs },
+  chipText: { ...typography.labelLarge },
+  hint: { ...typography.labelMedium, marginTop: space.xs },
 });
